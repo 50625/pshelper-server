@@ -1,9 +1,11 @@
 from flask import request
-from flask_restx import  Resource, Namespace, fields
-from src.analyzer.tagAnalyzer import TagAnalyzer
+from flask_restx import Resource, Namespace, fields
+from load_models import bert, tokenizer, convert_to_vector, classifier, classification, thresholds
+from src.preprocessor.textPreprocessor import textPreprocessor
+
 Analyze = Namespace(
     name="Analyze Algorithm",
-    description='문제 지문을 받고 적절한 태그를 반환한다.',
+    description='문제 지문을 받고 적절한 <strong>알고리즘 태그</strong>를 반환합니다.',
 )
 
 # Model 객체 생성
@@ -15,19 +17,15 @@ analyze_fields = Analyze.model('Problem', {
                            example="첫째 줄에 테스트 케이스의 개수 T가 주어진다. 각 테스트 케이스는 다음과 같이 구성되어있다. 테스트 케이스의 첫째 줄에 점의 개수 N이 주어진다. N은 짝수이다. 둘째 줄부터 N개의 줄에 점의 좌표가 주어진다. N은 20보다 작거나 같은 자연수이고, 좌표는 절댓값이 100,000보다 작거나 같은 정수다. 모든 점은 서로 다르다."),
 })
 
-# algorithm_fields = {
-#     fields.String : fields.Integer,
-# }
-
 algorithm_fields = fields.Wildcard(fields.String)
-wildcard_algorithm = { "*" :algorithm_fields}
 
 analyze_response = Analyze.model('Problem_response', {
-    'problem_id' : fields.String,
-    'problem_url' : fields.String,
-    'algorithm_type' : algorithm_fields
+    'problem_id': fields.String(description='문제 번호', required=True, example="1007"),
+    'problem_url': fields.String(description="문제 url", required=True, example="www.psHelper.de"),
+    'algorithm_type': algorithm_fields
 })
 
+''' test '''
 @Analyze.route('')
 class AnalyzeController(Resource):
 
@@ -35,15 +33,21 @@ class AnalyzeController(Resource):
     @Analyze.response(201, "Success", analyze_response)
     def post(self):
         content = request.json.get('content')
+        text_preprocessor = textPreprocessor()
         '''
             TO-DO
+            0. preprocess text
             1. analyze the description
         '''
-
-        tag = TagAnalyzer.fineTag(content)
-
+        preprocessed_text = text_preprocessor.preprocessing(content)
+        vector = convert_to_vector(bert, tokenizer, preprocessed_text)
+        out = classification(classifier, vector, thresholds)
+        # tag, ratio = model.predict(preprocessed_text)
+        #
         return {
                    'problem_id': request.json.get('problem_id'),
                    'problem_url': "https://www.acmicpc.net/problem/" + str(request.json.get('problem_id')),
-                   'algoritym_type': tag
+                   'algorithm_type' : out,
                }, 201
+
+
